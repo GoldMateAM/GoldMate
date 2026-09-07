@@ -23,8 +23,7 @@ service cloud.firestore {
 
     function approvedSeller() {
       return signedIn()
-        && (role() == "seller" || role() == "admin")
-        && userDoc().data.sellerApproved == true;
+        && (admin() || (role() == "seller" && userDoc().data.sellerApproved == true));
     }
 
     function sameUser(uid) {
