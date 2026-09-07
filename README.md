@@ -92,3 +92,6 @@ Frontend route hiding is only presentation. Firestore rules separately enforce a
 - products can only use 585/750/916/999 purity
 - Family Vault writes are admin-only
 - Family reads require admin status or explicit shared email access
+
+## Live gold pricing
+GoldMate uses Gold API (`XAU/USD`) for near-real-time spot gold and CBA `USD/AMD` for currency conversion. The UI refreshes gold values every 5 seconds. If the live provider is temporarily unavailable, `/api/market-rates` falls back to CBA XAU so the site keeps working.

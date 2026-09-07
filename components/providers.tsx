@@ -29,8 +29,11 @@ export function Providers({children}:{children:React.ReactNode}){
    const savedCurrency=localStorage.getItem("gm_currency") as Currency|null;
    if(savedLocale)setLocaleState(savedLocale);
    if(savedCurrency==="USD"||savedCurrency==="AMD")setCurrencyState(savedCurrency);
-   fetch("/api/market-rates").then(r=>r.ok?r.json():null).then(x=>{if(x?.usdAmd)setUsdAmd(Number(x.usdAmd))}).catch(()=>{});
-   return onAuthStateChanged(auth,async u=>{setUser(u);if(u)await load(u);else{setProfile(null);setVipAccess(false)}setLoading(false)})
+   const loadFx=()=>fetch("/api/market-rates",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(x=>{if(x?.usdAmd)setUsdAmd(Number(x.usdAmd))}).catch(()=>{});
+   loadFx();
+   const fxTimer=setInterval(loadFx,5*60*1000);
+   const unsub=onAuthStateChanged(auth,async u=>{setUser(u);if(u)await load(u);else{setProfile(null);setVipAccess(false)}setLoading(false)});
+   return()=>{clearInterval(fxTimer);unsub()}
  },[]);
  const setLocale=(l:Locale)=>{setLocaleState(l);localStorage.setItem("gm_locale",l);if(user)setDoc(doc(db,"users",user.uid),{locale:l},{merge:true}).catch(()=>{})};
  const setCurrency=(c:Currency)=>{setCurrencyState(c);localStorage.setItem("gm_currency",c)};
