@@ -1,0 +1,2 @@
+"use client";import Link from "next/link";import {useApp} from "./providers";import {Logo} from "./logo";
+export function Footer(){const {t}=useApp();return <footer className="footer"><div className="footer-grid"><div><Logo/><p>© 2026 GoldMate</p></div><div className="footer-links"><Link href="/market">{t.market}</Link><Link href="/rates">{t.rates}</Link><Link href="/profile">{t.profile}</Link></div></div></footer>}

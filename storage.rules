@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn(){ return request.auth != null; }
+    function userDoc(){ return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)); }
+    function admin(){ return signedIn() && userDoc().data.role == "admin"; }
+    match /public/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if signedIn() && (request.auth.uid == uid || admin()) && request.resource.size < 15 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+    match /vip/{allPaths=**} {
+      allow read: if admin() || (signedIn() && request.auth.token.email in firestore.get(/databases/(default)/documents/settings/vip).data.sharedEmails);
+      allow write: if admin();
+    }
+  }
+}
