@@ -1,60 +1,151 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn(){ return request.auth != null; }
-    function me(){ return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
-    function role(){ return signedIn() && me().exists() ? me().data.role : "guest"; }
-    function admin(){ return signedIn() && role() == "admin"; }
-    function approvedSeller(){ return signedIn() && (role()=="seller" || role()=="admin") && me().data.sellerApproved == true; }
-    function sameUser(uid){ return signedIn() && request.auth.uid == uid; }
-    function myEmail(){ return signedIn() ? request.auth.token.email : ""; }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return signedIn()
+        ? userDoc().data.role
+        : "guest";
+    }
+
+    function admin() {
+      return signedIn() && role() == "admin";
+    }
+
+    function approvedSeller() {
+      return signedIn()
+        && (role() == "seller" || role() == "admin")
+        && userDoc().data.sellerApproved == true;
+    }
+
+    function sameUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function myEmail() {
+      return signedIn() && request.auth.token.email != null
+        ? request.auth.token.email
+        : "";
+    }
 
     match /users/{uid} {
-      allow create: if sameUser(uid) && request.resource.data.role == "buyer" && request.resource.data.sellerApproved == false;
+      allow create: if sameUser(uid)
+        && request.resource.data.role == "buyer"
+        && request.resource.data.sellerApproved == false;
+
       allow read: if sameUser(uid) || admin();
-      allow update: if admin() || (sameUser(uid)
+
+      allow update: if admin() || (
+        sameUser(uid)
         && request.resource.data.role == resource.data.role
-        && request.resource.data.sellerApproved == resource.data.sellerApproved);
+        && request.resource.data.sellerApproved == resource.data.sellerApproved
+      );
+
       allow delete: if admin();
     }
 
     match /sellerApplications/{id} {
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow read: if admin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      allow read: if admin() || (
+        signedIn()
+        && resource.data.userId == request.auth.uid
+      );
+
       allow update, delete: if admin();
     }
 
     match /brands/{id} {
-      allow read: if resource.data.status == "active" || admin() || (signedIn() && resource.data.ownerId == request.auth.uid);
-      allow create: if approvedSeller() && request.resource.data.ownerId == request.auth.uid;
-      allow update: if admin() || (approvedSeller() && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId);
+      allow read: if resource.data.status == "active"
+        || admin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+
+      allow create: if approvedSeller()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      allow update: if admin() || (
+        approvedSeller()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+      );
+
       allow delete: if admin();
     }
 
     match /products/{id} {
-      allow read: if resource.data.status == "active" || admin() || (signedIn() && resource.data.sellerId == request.auth.uid);
-      allow create: if approvedSeller() && request.resource.data.sellerId == request.auth.uid && request.resource.data.purity in [585,750,916,999];
-      allow update: if admin() || (approvedSeller() && resource.data.sellerId == request.auth.uid && request.resource.data.sellerId == resource.data.sellerId && request.resource.data.purity in [585,750,916,999]);
-      allow delete: if admin() || (approvedSeller() && resource.data.sellerId == request.auth.uid);
+      allow read: if resource.data.status == "active"
+        || admin()
+        || (signedIn() && resource.data.sellerId == request.auth.uid);
+
+      allow create: if approvedSeller()
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.purity in [585, 750, 916, 999];
+
+      allow update: if admin() || (
+        approvedSeller()
+        && resource.data.sellerId == request.auth.uid
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.purity in [585, 750, 916, 999]
+      );
+
+      allow delete: if admin() || (
+        approvedSeller()
+        && resource.data.sellerId == request.auth.uid
+      );
     }
 
     match /orders/{id} {
-      allow create: if signedIn() && request.resource.data.buyerId == request.auth.uid;
-      allow read: if signedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid || admin());
-      allow update: if admin() || (signedIn() && resource.data.sellerId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.buyerId == request.auth.uid;
+
+      allow read: if signedIn() && (
+        resource.data.buyerId == request.auth.uid
+        || resource.data.sellerId == request.auth.uid
+        || admin()
+      );
+
+      allow update: if admin() || (
+        signedIn()
+        && resource.data.sellerId == request.auth.uid
+      );
     }
 
     match /financeEntries/{id} {
-      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow read, update, delete: if admin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      allow read, update, delete: if admin() || (
+        signedIn()
+        && resource.data.ownerId == request.auth.uid
+      );
     }
 
-    match /settings/pricing { allow read: if true; allow write: if admin(); }
-    match /settings/vip { allow read, write: if admin(); }
+    match /settings/pricing {
+      allow read: if true;
+      allow write: if admin();
+    }
+
+    match /settings/vip {
+      allow read, write: if admin();
+    }
 
     match /vipVaultItems/{id} {
-      allow read: if admin() || (signedIn() && myEmail() in resource.data.sharedEmails);
-      allow write: if admin();
+      allow read: if admin() || (
+        signedIn()
+        && myEmail() in resource.data.sharedEmails
+      );
+
+      allow create, update, delete: if admin();
     }
   }
 }
