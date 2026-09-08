@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const PURITIES = [585, 750, 916, 999] as const;
+const PURITIES = [585, 750, 900, 916, 958, 995, 999] as const;
 const GRAMS_PER_TROY_OUNCE = 31.1034768;
 const GOLDCENTER_URL = "https://goldcenter.am/price";
 const LIVE_CACHE_MS = 8_000;
@@ -128,10 +128,22 @@ async function fetchGoldCenterYerevanRates(): Promise<LocalSnapshot> {
       buyUSD: r9999.buyUSD * (750 / 999.9),
       sellUSD: r9999.sellUSD * (750 / 999.9),
     },
+    900: {
+    buyUSD: r9999.buyUSD * (900 / 999.9),
+    sellUSD: r9999.sellUSD * (900 / 999.9),
+    },
     916: {
       buyUSD: r9999.buyUSD * (916 / 999.9),
       sellUSD: r9999.sellUSD * (916 / 999.9),
     },
+     958: {
+    buyUSD: r9999.buyUSD * (958 / 999.9),
+    sellUSD: r9999.sellUSD * (958 / 999.9),
+    },
+     995: {
+    buyUSD: r9999.buyUSD * (995 / 999.9),
+    sellUSD: r9999.sellUSD * (995 / 999.9),
+  },
     // GoldMate uses 999. Convert the published 999.9 rate proportionally.
     999: {
       buyUSD: r9999.buyUSD * (999 / 999.9),

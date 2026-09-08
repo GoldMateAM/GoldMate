@@ -88,13 +88,13 @@ service cloud.firestore {
 
       allow create: if approvedSeller()
         && request.resource.data.sellerId == request.auth.uid
-        && request.resource.data.purity in [585, 750, 916, 999];
+        && request.resource.data.purity in [585, 750, 900, 916, 958, 995, 999];
 
       allow update: if admin() || (
         approvedSeller()
         && resource.data.sellerId == request.auth.uid
         && request.resource.data.sellerId == resource.data.sellerId
-        && request.resource.data.purity in [585, 750, 916, 999]
+        && request.resource.data.purity in [585, 750, 900, 916, 958, 995, 999]
       );
 
       allow delete: if admin() || (

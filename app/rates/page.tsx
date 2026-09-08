@@ -4,7 +4,7 @@ import {doc,onSnapshot} from "firebase/firestore";
 import {db} from "@/lib/firebase";
 import {useApp} from "@/components/providers";
 
-const PURITIES=[585,750,916,999];
+const PURITIES=[585,750,900,916,958,995,999];
 export default function Rates(){
  const {t,money}=useApp(),[data,setData]=useState<any>(null),[cfg,setCfg]=useState<any>({buyAdjustmentPct:-3,sellAdjustmentPct:4}),[purity,setPurity]=useState(585),[grams,setGrams]=useState(10),[mode,setMode]=useState<"buy"|"sell">("sell");
  useEffect(()=>{const load=()=>fetch("/api/market-rates").then(r=>r.ok?r.json():null).then(setData).catch(()=>{});load();const u=onSnapshot(doc(db,"settings","pricing"),s=>s.exists()&&setCfg((v:any)=>({...v,...s.data()})),()=>{});const id=setInterval(load,10000);return()=>{u();clearInterval(id)}},[]);
