@@ -193,7 +193,7 @@ export async function GET() {
       } else {
         const live = await fetchLiveGoldUsdPerOz();
         localRates = emergencyLocalFromSpot(live.price / GRAMS_PER_TROY_OUNCE);
-        localSource = "Gold API · emergency estimate (GoldCenter unavailable)";
+        localSource = "Gold";
         exactLocal = false;
         stale = true;
       }
