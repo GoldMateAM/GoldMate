@@ -17,10 +17,77 @@ const emptyForm={name:"",category:"ring",color:"yellow",purity:585,weight:"",pur
 export default function VIP(){
  const {profile,t,currency,usdAmd,money,loading}=useApp();
  const [items,setItems]=useState<VaultItem[]>([]),[shared,setShared]=useState<string[]>([]),[email,setEmail]=useState(""),[buyRates,setBuyRates]=useState<Record<number,number>>({}),[open,setOpen]=useState(false),[editing,setEditing]=useState<VaultItem|null>(null),[existing,setExisting]=useState<string[]>([]),[files,setFiles]=useState<File[]>([]),[f,setF]=useState<any>(emptyForm),[saving,setSaving]=useState(false),[lightbox,setLightbox]=useState<{images:string[];index:number}|null>(null);
+ const [search,setSearch]=useState("");
+const [sortBy,setSortBy]=useState("date-desc");
+const [purityFilter,setPurityFilter]=useState("all");
  const isAdmin=profile?.role==="admin";
  useEffect(()=>{if(!profile)return;let alive=true;const loadRate=()=>fetch("/api/market-rates",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(x=>{if(alive&&Array.isArray(x?.purities))setBuyRates(Object.fromEntries(x.purities.map((r:any)=>[Number(r.purity),Number(r.buyAMD||0)])))}).catch(()=>{});loadRate();const rateTimer=setInterval(loadRate,10000);if(isAdmin){const q=query(collection(db,"vipVaultItems"),orderBy("createdAt","desc"));const u=onSnapshot(q,s=>setItems(s.docs.map(d=>({id:d.id,...d.data()} as VaultItem))),e=>toast.error(e.message));const us=onSnapshot(doc(db,"settings","vip"),s=>setShared((s.data()?.sharedEmails||[]) as string[]),e=>toast.error(e.message));return()=>{alive=false;clearInterval(rateTimer);u();us()}}else{const q=query(collection(db,"vipVaultItems"),where("sharedEmails","array-contains",String(profile.email||"").toLowerCase()));const u=onSnapshot(q,s=>setItems(s.docs.map(d=>({id:d.id,...d.data()} as VaultItem))),()=>setItems([]));return()=>{alive=false;clearInterval(rateTimer);u()}}},[profile?.id,isAdmin]);
  useEffect(()=>{if(editing&&usdAmd>0)setF((x:any)=>({...x,purchasePrice:String(Number(amountFromAMD(editing.purchasePriceAMD,currency,usdAmd).toFixed(currency==="USD"?2:0))) }))},[currency,usdAmd,editing?.id]);
  const purchase=useMemo(()=>items.reduce((a,x)=>a+Number(x.purchasePriceAMD||0),0),[items]),current=useMemo(()=>items.reduce((a,x)=>a+(Number(buyRates[x.purity]||0)*Number(x.weightGrams||0)),0),[items,buyRates]),grams=useMemo(()=>items.reduce((a,x)=>a+Number(x.weightGrams||0),0),[items]);
+ const availablePurities=useMemo(
+  ()=>Array.from(new Set(items.map(x=>Number(x.purity)))).sort((a,b)=>a-b),
+  [items]
+);
+
+const visibleItems=useMemo(()=>{
+  const q=search.trim().toLowerCase();
+
+  const filtered=items.filter(x=>{
+    const matchesSearch=
+      !q ||
+      String(x.name||"").toLowerCase().includes(q) ||
+      String(x.acquiredFrom||"").toLowerCase().includes(q);
+
+    const matchesPurity=
+      purityFilter==="all" ||
+      Number(x.purity)===Number(purityFilter);
+
+    return matchesSearch && matchesPurity;
+  });
+
+  return [...filtered].sort((a,b)=>{
+    switch(sortBy){
+
+      case "price-desc":
+        return Number(b.purchasePriceAMD||0)-Number(a.purchasePriceAMD||0);
+
+      case "price-asc":
+        return Number(a.purchasePriceAMD||0)-Number(b.purchasePriceAMD||0);
+
+      case "weight-desc":
+        return Number(b.weightGrams||0)-Number(a.weightGrams||0);
+
+      case "weight-asc":
+        return Number(a.weightGrams||0)-Number(b.weightGrams||0);
+
+      case "name-asc":
+        return String(a.name||"").localeCompare(
+          String(b.name||""),
+          undefined,
+          {sensitivity:"base"}
+        );
+
+      case "name-desc":
+        return String(b.name||"").localeCompare(
+          String(a.name||""),
+          undefined,
+          {sensitivity:"base"}
+        );
+
+      case "date-asc":
+        return String(a.purchaseDate||"").localeCompare(
+          String(b.purchaseDate||"")
+        );
+
+      case "date-desc":
+      default:
+        return String(b.purchaseDate||"").localeCompare(
+          String(a.purchaseDate||"")
+        );
+    }
+  });
+
+},[items,search,purityFilter,sortBy]);
  function newItem(){setEditing(null);setExisting([]);setFiles([]);setF({...emptyForm});setOpen(true)}
  function editItem(x:VaultItem){setEditing(x);setExisting(x.images||[]);setFiles([]);setF({name:x.name||"",category:x.category||"ring",color:x.color||"yellow",purity:x.purity||585,weight:String(x.weightGrams||""),purchasePrice:usdAmd>0?String(Number(amountFromAMD(x.purchasePriceAMD,currency,usdAmd).toFixed(currency==="USD"?2:0))):"",purchaseDate:x.purchaseDate||"",acquiredFrom:x.acquiredFrom||"",notes:x.notes||""});setOpen(true)}
  function closeForm(){setOpen(false);setEditing(null);setExisting([]);setFiles([]);setF({...emptyForm})}
@@ -34,5 +101,72 @@ export default function VIP(){
   </main>;
  if(!profile)return <main className="shell page"><div className="not-found"><div><strong>404</strong><p>{t.error}</p></div></div></main>;
  if(!isAdmin&&!items.length)return <main className="shell page"><div className="not-found"><div><strong>404</strong><p>{t.error}</p></div></div></main>;
- return <main className="shell page"><div className="seller-head"><div className="page-title"><div className="eyebrow">GoldMate</div><h1>{t.vipTitle}</h1><p>{t.vipText}</p></div>{isAdmin?<button className="btn-primary" onClick={newItem}>+ {t.addVault}</button>:<span className="status-pill">{t.readOnly}</span>}</div><div className="stats"><Stat label={t.purchaseValue} value={money(purchase)}/><Stat label={t.currentValue} value={money(current)}/><Stat label={t.totalWeight} value={`${grams.toFixed(2)} g`}/><Stat label={t.items} value={String(items.length)}/></div>{isAdmin&&<div className="panel" style={{marginTop:20}}><h2>{t.share}</h2><div style={{display:"flex",gap:8}}><input className="field" placeholder={t.email} value={email} onChange={e=>setEmail(e.target.value)}/><button className="btn-primary" onClick={addShare}>{t.addEmail}</button></div><div className="share-list">{shared.map(x=><span className="share-chip" key={x}>{x} <button style={{background:"none",border:0,color:"#e6aaa0"}} onClick={()=>removeShare(x)}>×</button></span>)}</div></div>}{open&&isAdmin&&<div className="panel" style={{marginTop:20}}><div className="form-grid"><label><span className="form-label">{t.name}</span><input className="field" value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></label><label><span className="form-label">{t.category}</span><select className="field" value={f.category} onChange={e=>setF({...f,category:e.target.value})}>{["ring","earrings","necklace","bracelet","chain","pendant","other"].map(x=><option key={x} value={x}>{t[x as keyof typeof t] as string}</option>)}</select></label><label><span className="form-label">{t.color}</span><select className="field" value={f.color} onChange={e=>setF({...f,color:e.target.value})}>{["yellow","white","rose","mixed"].map(x=><option key={x} value={x}>{t[x as keyof typeof t] as string}</option>)}</select></label><label><span className="form-label">{t.purity}</span><select className="field" value={f.purity} onChange={e=>setF({...f,purity:e.target.value})}>{[585,750,900,916,958,995,999].map(x=><option key={x}>{x}</option>)}</select></label><label><span className="form-label">{t.weight}</span><input className="field" type="number" min="0" step=".01" value={f.weight} onChange={e=>setF({...f,weight:e.target.value})}/></label><label><span className="form-label">{t.purchasePrice} · {currency}</span><input className="field" type="number" min="0" step=".01" value={f.purchasePrice} onChange={e=>setF({...f,purchasePrice:e.target.value})}/></label><label><span className="form-label">{t.purchaseDate}</span><input className="field" type="date" value={f.purchaseDate} onChange={e=>setF({...f,purchaseDate:e.target.value})}/></label><label><span className="form-label">{t.acquiredFrom}</span><input className="field" value={f.acquiredFrom} onChange={e=>setF({...f,acquiredFrom:e.target.value})}/></label><label className="full"><span className="form-label">{t.note}</span><textarea className="field" value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></label><div className="full"><ImagePicker existing={existing} onExistingChange={setExisting} files={files} onFilesChange={setFiles} label={t.photos}/></div></div><div style={{display:"flex",gap:10,marginTop:14}}><button className="btn-primary" disabled={saving} onClick={save}>{saving?t.loading:t.save}</button><button className="btn-secondary" onClick={closeForm}>{t.close}</button></div></div>}<div className="vault-grid">{items.map(x=><article className="vault-card" key={x.id}>{x.images?.[0]&&<button className="vault-image-button" onClick={()=>setLightbox({images:x.images,index:0})}><img src={x.images[0]} alt={x.name}/>{x.images.length>1&&<span className="image-count">+{x.images.length-1}</span>}</button>}<div className="vault-body"><h3>{x.name}</h3><div className="product-meta">{x.purity} · {x.weightGrams}g · {t[x.color as keyof typeof t] as string}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}><div className="spec"><span>{t.purchasePrice}</span><strong>{money(x.purchasePriceAMD)}</strong></div><div className="spec"><span>{t.currentValue}</span><strong>{money(Number(buyRates[x.purity]||0)*Number(x.weightGrams||0))}</strong></div></div><p className="muted">{x.purchaseDate} · {x.acquiredFrom}</p>{isAdmin&&<div className="vault-actions"><button className="btn-secondary" onClick={()=>editItem(x)}><Pencil size={15}/></button><button className="btn-danger" onClick={()=>removeItem(x.id)}><Trash2 size={15}/></button></div>}</div></article>)}</div>{lightbox&&<ImageLightbox images={lightbox.images} index={lightbox.index} onClose={()=>setLightbox(null)} onChange={i=>setLightbox(v=>v?{...v,index:i}:v)}/>}</main>
+ return <main className="shell page"><div className="seller-head"><div className="page-title"><div className="eyebrow">GoldMate</div><h1>{t.vipTitle}</h1><p>{t.vipText}</p></div>{isAdmin?<button className="btn-primary" onClick={newItem}>+ {t.addVault}</button>:<span className="status-pill">{t.readOnly}</span>}</div><div className="stats"><Stat label={t.purchaseValue} value={money(purchase)}/><Stat label={t.currentValue} value={money(current)}/><Stat label={t.totalWeight} value={`${grams.toFixed(2)} g`}/><Stat label={t.items} value={String(items.length)}/></div>{isAdmin&&<div className="panel" style={{marginTop:20}}><h2>{t.share}</h2><div style={{display:"flex",gap:8}}><input className="field" placeholder={t.email} value={email} onChange={e=>setEmail(e.target.value)}/><button className="btn-primary" onClick={addShare}>{t.addEmail}</button></div><div className="share-list">{shared.map(x=><span className="share-chip" key={x}>{x} <button style={{background:"none",border:0,color:"#e6aaa0"}} onClick={()=>removeShare(x)}>×</button></span>)}</div></div>}{open&&isAdmin&&<div className="panel" style={{marginTop:20}}><div className="form-grid"><label><span className="form-label">{t.name}</span><input className="field" value={f.name} onChange={e=>setF({...f,name:e.target.value})}/></label><label><span className="form-label">{t.category}</span><select className="field" value={f.category} onChange={e=>setF({...f,category:e.target.value})}>{["ring","earrings","necklace","bracelet","chain","pendant","other"].map(x=><option key={x} value={x}>{t[x as keyof typeof t] as string}</option>)}</select></label><label><span className="form-label">{t.color}</span><select className="field" value={f.color} onChange={e=>setF({...f,color:e.target.value})}>{["yellow","white","rose","mixed"].map(x=><option key={x} value={x}>{t[x as keyof typeof t] as string}</option>)}</select></label><label><span className="form-label">{t.purity}</span><select className="field" value={f.purity} onChange={e=>setF({...f,purity:e.target.value})}>{[585,750,900,916,958,995,999].map(x=><option key={x}>{x}</option>)}</select></label><label><span className="form-label">{t.weight}</span><input className="field" type="number" min="0" step=".01" value={f.weight} onChange={e=>setF({...f,weight:e.target.value})}/></label><label><span className="form-label">{t.purchasePrice} · {currency}</span><input className="field" type="number" min="0" step=".01" value={f.purchasePrice} onChange={e=>setF({...f,purchasePrice:e.target.value})}/></label><label><span className="form-label">{t.purchaseDate}</span><input className="field" type="date" value={f.purchaseDate} onChange={e=>setF({...f,purchaseDate:e.target.value})}/></label><label><span className="form-label">{t.acquiredFrom}</span><input className="field" value={f.acquiredFrom} onChange={e=>setF({...f,acquiredFrom:e.target.value})}/></label><label className="full"><span className="form-label">{t.note}</span><textarea className="field" value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></label><div className="full"><ImagePicker existing={existing} onExistingChange={setExisting} files={files} onFilesChange={setFiles} label={t.photos}/></div></div><div style={{display:"flex",gap:10,marginTop:14}}><button className="btn-primary" disabled={saving} onClick={save}>{saving?t.loading:t.save}</button><button className="btn-secondary" onClick={closeForm}>{t.close}</button></div></div>}<div
+  style={{
+    display:"grid",
+    gridTemplateColumns:"minmax(220px,1.4fr) minmax(150px,.8fr) minmax(190px,1fr)",
+    gap:10,
+    marginTop:24,
+    marginBottom:16
+  }}
+>
+  <input
+    className="field"
+    placeholder="Որոնել ըստ անվան..."
+    value={search}
+    onChange={e=>setSearch(e.target.value)}
+  />
+
+  <select
+    className="field"
+    value={purityFilter}
+    onChange={e=>setPurityFilter(e.target.value)}
+  >
+    <option value="all">Բոլոր պրոբաները</option>
+
+    {availablePurities.map(p=>(
+      <option key={p} value={p}>
+        {p}
+      </option>
+    ))}
+  </select>
+
+  <select
+    className="field"
+    value={sortBy}
+    onChange={e=>setSortBy(e.target.value)}
+  >
+    <option value="date-desc">
+      Ամսաթիվ · նորից հին
+    </option>
+
+    <option value="date-asc">
+      Ամսաթիվ · հնից նոր
+    </option>
+
+    <option value="price-desc">
+      Գին · բարձրից ցածր
+    </option>
+
+    <option value="price-asc">
+      Գին · ցածրից բարձր
+    </option>
+
+    <option value="weight-desc">
+      Քաշ · բարձրից ցածր
+    </option>
+
+    <option value="weight-asc">
+      Քաշ · ցածրից բարձր
+    </option>
+
+    <option value="name-asc">
+      Անուն · Ա → Ֆ
+    </option>
+
+    <option value="name-desc">
+      Անուն · Ֆ → Ա
+    </option>
+  </select>
+</div><div className="vault-grid">{visibleItems.map(x=><article className="vault-card" key={x.id}>{x.images?.[0]&&<button className="vault-image-button" onClick={()=>setLightbox({images:x.images,index:0})}><img src={x.images[0]} alt={x.name}/>{x.images.length>1&&<span className="image-count">+{x.images.length-1}</span>}</button>}<div className="vault-body"><h3>{x.name}</h3><div className="product-meta">{x.purity} · {x.weightGrams}g · {t[x.color as keyof typeof t] as string}</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}><div className="spec"><span>{t.purchasePrice}</span><strong>{money(x.purchasePriceAMD)}</strong></div><div className="spec"><span>{t.currentValue}</span><strong>{money(Number(buyRates[x.purity]||0)*Number(x.weightGrams||0))}</strong></div></div><p className="muted">{x.purchaseDate} · {x.acquiredFrom}</p>{isAdmin&&<div className="vault-actions"><button className="btn-secondary" onClick={()=>editItem(x)}><Pencil size={15}/></button><button className="btn-danger" onClick={()=>removeItem(x.id)}><Trash2 size={15}/></button></div>}</div></article>)}</div>{lightbox&&<ImageLightbox images={lightbox.images} index={lightbox.index} onClose={()=>setLightbox(null)} onChange={i=>setLightbox(v=>v?{...v,index:i}:v)}/>}</main>
 }
